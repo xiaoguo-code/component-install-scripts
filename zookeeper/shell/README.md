@@ -13,24 +13,23 @@
     * 等变量。
 2. 在脚本所在目录下执行以下命令进行zookeeper安装：
    ```shell
-   chmod +x install-zookeeper-cluster.sh
-   ./install-zookeeper-cluster.sh install
+   bash install-zookeeper-cluster.sh install
    ```
 4. 执行以下命令启动ZooKeeper集群：
    ```shell
-   ./install-zookeeper-cluster.sh start
+   bash install-zookeeper-cluster.sh start
    ```
 5. 执行以下命令停止ZooKeeper集群：
    ```shell
-   ./install-zookeeper-cluster.sh stop
+   bash install-zookeeper-cluster.sh stop
    ```
 6. 执行以下命令查看ZooKeeper集群状态：
    ```shell
-   ./install-zookeeper-cluster.sh status
+   bash install-zookeeper-cluster.sh status
    ```
 7. 执行以下命令卸载ZooKeeper集群：
    ```shell
-   ./install-zookeeper-cluster.sh uninstall
+   bash install-zookeeper-cluster.sh uninstall
    ```
 
 ## 注意事项
