@@ -15,14 +15,19 @@ ZK_HOSTNAMES=(               # 集群节点主机名
 )
 SSH_USER="root"             # 目标服务器SSH用户名
 ZK_TAR="apache-zookeeper-3.8.4-bin.tar.gz"  # 安装包名称
-ZK_ADMIN_SERVER_PORT=8580          # 指定zk的AdminServer服务端口，用于提供监控和管理信息
-ZK_ADMIN_SERVER_ENABLE=false      # AdminServer服务是否开启，默认关闭
+
+# 新增可配置参数
+ZK_INSTALL_DIR="/usr/local/zookeeper"  # ZooKeeper安装目录
+ZK_DATA_DIR="/data/zookeeper/data"     # ZooKeeper数据目录
+ZK_LOG_DIR="/data/zookeeper/logs"      # ZooKeeper日志目录
+ZK_CLIENT_PORT=2181                    # ZooKeeper客户端端口
+ZK_PEER_PORT=2888                      # ZooKeeper Peer通信端口
+ZK_ELECTION_PORT=3888                  # ZooKeeper选举端口
+ZK_ADMIN_SERVER_PORT=8580              # AdminServer服务端口
+ZK_ADMIN_SERVER_ENABLE=false           # AdminServer服务是否开启
 ##################################################
 
 # 全局变量
-ZK_INSTALL_DIR="/usr/local/zookeeper"
-ZK_DATA_DIR="/data/zookeeper/data"
-ZK_LOG_DIR="/data/zookeeper/logs"
 ZK_TAR_BASENAME=$(basename "$ZK_TAR" .tar.gz)  # 安装包名解压后的文件名
 
 # 检查参数合法性
@@ -47,11 +52,11 @@ generate_config() {
 tickTime=2000
 initLimit=10
 syncLimit=5
-clientPort=2181
+clientPort=$ZK_CLIENT_PORT
 dataDir=$ZK_DATA_DIR
 dataLogDir=$ZK_LOG_DIR
 $(for i in "${!ZK_HOSTNAMES[@]}"; do
-    echo "server.$(echo "${ZK_NODES[i]}" | awk -F. '{print $4}')=${ZK_HOSTNAMES[i]}:2888:3888"
+    echo "server.$(echo "${ZK_NODES[i]}" | awk -F. '{print $4}')=${ZK_HOSTNAMES[i]}:$ZK_PEER_PORT:$ZK_ELECTION_PORT"
   done)
 admin.serverPort=$ZK_ADMIN_SERVER_PORT
 admin.enableServer=$ZK_ADMIN_SERVER_ENABLE
@@ -118,11 +123,27 @@ EOF
     done
 
     echo "集群安装完成！"
+    echo "安装目录: $ZK_INSTALL_DIR"
+    echo "数据目录: $ZK_DATA_DIR"
+    echo "日志目录: $ZK_LOG_DIR"
+    echo "客户端端口: $ZK_CLIENT_PORT"
 }
 
 # 卸载集群
 uninstall_cluster() {
-    remote_exec "rm -rf $ZK_INSTALL_DIR /data/zookeeper && sed -i '/ZooKeeper环境变量/d;/ZK_HOME=/d;/\$ZK_HOME\/bin/d' /etc/profile"
+    echo "正在卸载集群..."
+    echo "将删除以下目录:"
+    echo "  - $ZK_INSTALL_DIR"
+    echo "  - $ZK_DATA_DIR"
+    echo "  - $ZK_LOG_DIR"
+
+    read -p "确认要卸载吗？(y/n): " confirm
+    if [[ $confirm != "y" && $confirm != "Y" ]]; then
+        echo "卸载已取消"
+        exit 0
+    fi
+
+    remote_exec "rm -rf $ZK_INSTALL_DIR $ZK_DATA_DIR $ZK_LOG_DIR && sed -i '/ZooKeeper环境变量/d;/ZK_HOME=/d;/\$ZK_HOME\/bin/d' /etc/profile"
     echo "集群已卸载"
 }
 
@@ -132,9 +153,33 @@ service_control() {
     remote_exec "$ZK_INSTALL_DIR/bin/zkServer.sh $action"
 }
 
+# 显示配置信息
+show_config() {
+    echo "=== ZooKeeper集群配置信息 ==="
+    echo "安装目录: $ZK_INSTALL_DIR"
+    echo "数据目录: $ZK_DATA_DIR"
+    echo "日志目录: $ZK_LOG_DIR"
+    echo "客户端端口: $ZK_CLIENT_PORT"
+    echo "Peer端口: $ZK_PEER_PORT"
+    echo "选举端口: $ZK_ELECTION_PORT"
+    echo "AdminServer端口: $ZK_ADMIN_SERVER_PORT"
+    echo "AdminServer启用: $ZK_ADMIN_SERVER_ENABLE"
+    echo "集群节点:"
+    for i in "${!ZK_NODES[@]}"; do
+        echo "  - ${ZK_HOSTNAMES[i]} (${ZK_NODES[i]}) -> myid: $(echo "${ZK_NODES[i]}" | awk -F. '{print $4}')"
+    done
+    echo "============================="
+}
+
 # 主逻辑
 case "$1" in
     install)
+        show_config
+        read -p "确认以上配置进行安装吗？(y/n): " confirm
+        if [[ $confirm != "y" && $confirm != "Y" ]]; then
+            echo "安装已取消"
+            exit 0
+        fi
         install_cluster
         ;;
     uninstall)
@@ -143,9 +188,12 @@ case "$1" in
     start|stop|status)
         service_control "$1"
         ;;
+    config)
+        show_config
+        ;;
     *)
         echo "错误: 无效操作 '$1'"
-        echo "用法: $0 [install/uninstall/start/stop/status]"
+        echo "用法: $0 [install/uninstall/start/stop/status/config]"
         exit 1
         ;;
 esac
